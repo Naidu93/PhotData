@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>ID Card A4 Print Tool (Enhanced Crop & PDF)</title>
+  <title>ID Card A4 Print Tool (Custom Filters & Exact PDF)</title>
   
   <!-- html2canvas and jsPDF for 1:1 PDF output -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -62,7 +62,7 @@
 
     .upload-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
       gap: 16px;
     }
 
@@ -141,7 +141,7 @@
       font-size: 0.8rem;
       color: #475569;
       background: #f8fafc;
-      padding: 10px 12px;
+      padding: 12px;
       border-radius: 8px;
       border: 1px solid #e2e8f0;
     }
@@ -154,13 +154,22 @@
     }
 
     .controls-row label {
-      min-width: 90px;
+      min-width: 100px;
       font-weight: 600;
     }
 
-    .controls-row input[type="range"] {
+    .controls-row input[type="range"],
+    .controls-row select {
       flex: 1;
       cursor: pointer;
+    }
+
+    .controls-row select {
+      padding: 4px 8px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: white;
+      font-size: 0.8rem;
     }
 
     input[type="file"] {
@@ -253,6 +262,7 @@
       display: flex;
       justify-content: center;
       align-items: center;
+      position: relative;
     }
 
     .card-slot {
@@ -268,6 +278,8 @@
       background-position: center;
       background-color: #fafafa;
       box-sizing: border-box;
+      position: relative;
+      transition: transform 0.05s ease-out;
     }
 
     .card-slot span {
@@ -341,8 +353,8 @@
   <div id="loading-overlay">Processing Image...</div>
 
   <header>
-    <h1>ID Card Print Helper</h1>
-    <p>Upload, rotate, auto-crop / manual trim, scale, and export exact A4 PDF layout.</p>
+    <h1>BM ARTS Print Helper</h1>
+    <p>Upload, rotate, crop, filter, scale, position, and preview exact A4 PDF layout.</p>
   </header>
 
   <div class="app-container">
@@ -366,6 +378,15 @@
         
         <div class="controls-panel">
           <div class="controls-row">
+            <label>Image Filter:</label>
+            <select id="filter-front" onchange="applySelectedFilter('front')">
+              <option value="magic">Magic Color (Scanner)</option>
+              <option value="grayscale">Grayscale</option>
+              <option value="bw">Black & White (High Contrast)</option>
+              <option value="none">Original Photo</option>
+            </select>
+          </div>
+          <div class="controls-row">
             <label>Print Scale:</label>
             <input type="range" id="scale-front" min="70" max="130" value="100" oninput="resizeCard('front', this.value)" />
             <b id="val-front">100%</b>
@@ -374,6 +395,16 @@
             <label>Crop Margin:</label>
             <input type="range" id="crop-front" min="0" max="30" value="0" oninput="manualCropAdjust('front', this.value)" />
             <b id="crop-val-front">0%</b>
+          </div>
+          <div class="controls-row">
+            <label>Position X (H):</label>
+            <input type="range" id="pos-x-front" min="-30" max="30" value="0" oninput="updatePosition('front')" />
+            <b id="pos-x-val-front">0mm</b>
+          </div>
+          <div class="controls-row">
+            <label>Position Y (V):</label>
+            <input type="range" id="pos-y-front" min="-30" max="30" value="0" oninput="updatePosition('front')" />
+            <b id="pos-y-val-front">0mm</b>
           </div>
         </div>
 
@@ -398,6 +429,15 @@
 
         <div class="controls-panel">
           <div class="controls-row">
+            <label>Image Filter:</label>
+            <select id="filter-back" onchange="applySelectedFilter('back')">
+              <option value="magic">Magic Color (Scanner)</option>
+              <option value="grayscale">Grayscale</option>
+              <option value="bw">Black & White (High Contrast)</option>
+              <option value="none">Original Photo</option>
+            </select>
+          </div>
+          <div class="controls-row">
             <label>Print Scale:</label>
             <input type="range" id="scale-back" min="70" max="130" value="100" oninput="resizeCard('back', this.value)" />
             <b id="val-back">100%</b>
@@ -406,6 +446,16 @@
             <label>Crop Margin:</label>
             <input type="range" id="crop-back" min="0" max="30" value="0" oninput="manualCropAdjust('back', this.value)" />
             <b id="crop-val-back">0%</b>
+          </div>
+          <div class="controls-row">
+            <label>Position X (H):</label>
+            <input type="range" id="pos-x-back" min="-30" max="30" value="0" oninput="updatePosition('back')" />
+            <b id="pos-x-val-back">0mm</b>
+          </div>
+          <div class="controls-row">
+            <label>Position Y (V):</label>
+            <input type="range" id="pos-y-back" min="-30" max="30" value="0" oninput="updatePosition('back')" />
+            <b id="pos-y-val-back">0mm</b>
           </div>
         </div>
 
@@ -457,9 +507,8 @@
     const BASE_WIDTH_MM = 85.6;
     const BASE_HEIGHT_MM = 53.9;
 
-    // Canvas memory stores
     const rawCanvasStore = { front: null, back: null };
-    const processedCanvasStore = { front: null, back: null };
+    const croppedCanvasStore = { front: null, back: null };
 
     function triggerFile(id) {
       document.getElementById(id).click();
@@ -494,7 +543,17 @@
       slot.style.height = `${heightMm}mm`;
     }
 
-    /* Manual Crop Slider Adjustment */
+    function updatePosition(target) {
+      const posX = document.getElementById(`pos-x-${target}`).value;
+      const posY = document.getElementById(`pos-y-${target}`).value;
+
+      document.getElementById(`pos-x-val-${target}`).innerText = `${posX}mm`;
+      document.getElementById(`pos-y-val-${target}`).innerText = `${posY}mm`;
+
+      const slot = document.getElementById(`slot-${target}`);
+      slot.style.transform = `translate(${posX}mm, ${posY}mm)`;
+    }
+
     function manualCropAdjust(target, cropPercent) {
       document.getElementById(`crop-val-${target}`).innerText = `${cropPercent}%`;
       if (!rawCanvasStore[target]) return;
@@ -515,9 +574,8 @@
       const ctx = trimmed.getContext('2d');
       ctx.drawImage(srcCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
 
-      applyMagicColorFilter(trimmed);
-      processedCanvasStore[target] = trimmed;
-      renderCanvasToUI(target, trimmed);
+      croppedCanvasStore[target] = trimmed;
+      applySelectedFilter(target);
     }
 
     function reCrop(target) {
@@ -527,15 +585,39 @@
         showLoader("Recropping...");
         setTimeout(() => {
           const cropped = autoCropImage(rawCanvasStore[target]);
-          applyMagicColorFilter(cropped);
-          processedCanvasStore[target] = cropped;
-          renderCanvasToUI(target, cropped);
+          croppedCanvasStore[target] = cropped;
+          applySelectedFilter(target);
           hideLoader();
         }, 50);
       }
     }
 
-    /* Direct 1:1 Image-Stamped PDF Generation */
+    /* FILTER SELECTION DISPATCHER */
+    function applySelectedFilter(target) {
+      if (!croppedCanvasStore[target]) return;
+
+      const filterType = document.getElementById(`filter-${target}`).value;
+      const sourceCanvas = croppedCanvasStore[target];
+
+      // Clone canvas to apply filter non-destructively
+      const workingCanvas = document.createElement('canvas');
+      workingCanvas.width = sourceCanvas.width;
+      workingCanvas.height = sourceCanvas.height;
+      const ctx = workingCanvas.getContext('2d');
+      ctx.drawImage(sourceCanvas, 0, 0);
+
+      if (filterType === 'magic') {
+        applyMagicColorFilter(workingCanvas);
+      } else if (filterType === 'grayscale') {
+        applyGrayscaleFilter(workingCanvas);
+      } else if (filterType === 'bw') {
+        applyBlackAndWhiteFilter(workingCanvas);
+      }
+
+      renderCanvasToUI(target, workingCanvas);
+    }
+
+    /* DIRECT 1:1 PDF STAMPING */
     async function downloadPDF() {
       showLoader("Generating Exact PDF...");
       const element = document.getElementById('a4-sheet-element');
@@ -567,7 +649,7 @@
       }
     }
 
-    /* Camera Logic */
+    /* CAMERA LOGIC */
     async function openCamera(target) {
       activeTarget = target;
       const modal = document.getElementById('camera-modal');
@@ -606,7 +688,7 @@
       processImagePipeline(dataUrl, activeTarget);
     }
 
-    /* MAIN PIPELINE */
+    /* MAIN PROCESSING PIPELINE */
     function processImagePipeline(dataUrl, target) {
       const img = new Image();
       img.onload = () => {
@@ -622,10 +704,9 @@
             document.getElementById(`crop-val-${target}`).innerText = "0%";
 
             const croppedCanvas = autoCropImage(srcCanvas);
-            applyMagicColorFilter(croppedCanvas);
+            croppedCanvasStore[target] = croppedCanvas;
 
-            processedCanvasStore[target] = croppedCanvas;
-            renderCanvasToUI(target, croppedCanvas);
+            applySelectedFilter(target);
 
         } catch (error) {
             console.error("Processing error:", error);
@@ -664,10 +745,9 @@
         rawCanvasStore[target] = rotatedCanvas;
 
         const cropped = autoCropImage(rotatedCanvas);
-        applyMagicColorFilter(cropped);
-        processedCanvasStore[target] = cropped;
-        renderCanvasToUI(target, cropped);
+        croppedCanvasStore[target] = cropped;
 
+        applySelectedFilter(target);
         hideLoader();
       }, 50);
     }
@@ -688,7 +768,9 @@
         slot.querySelector('span').style.display = 'none';
     }
 
-    /* MAGIC COLOR FILTER */
+    /* FILTERS ALGORITHMS */
+
+    // 1. Magic Color Filter (Scanner style)
     function applyMagicColorFilter(canvas) {
         const ctx = canvas.getContext('2d');
         const width = canvas.width;
@@ -741,6 +823,39 @@
         sharpenCanvas(canvas);
     }
 
+    // 2. Grayscale Filter
+    function applyGrayscaleFilter(canvas) {
+        const ctx = canvas.getContext('2d');
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imgData.data;
+
+        for (let i = 0; i < data.length; i += 4) {
+            const gray = data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114;
+            data[i] = gray;
+            data[i+1] = gray;
+            data[i+2] = gray;
+        }
+
+        ctx.putImageData(imgData, 0, 0);
+    }
+
+    // 3. Black & White (Binary High Contrast Filter)
+    function applyBlackAndWhiteFilter(canvas) {
+        const ctx = canvas.getContext('2d');
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imgData.data;
+
+        for (let i = 0; i < data.length; i += 4) {
+            const gray = data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114;
+            const bw = gray > 150 ? 255 : 0; // Binary threshold
+            data[i] = bw;
+            data[i+1] = bw;
+            data[i+2] = bw;
+        }
+
+        ctx.putImageData(imgData, 0, 0);
+    }
+
     function sharpenCanvas(canvas) {
         const ctx = canvas.getContext('2d');
         const w = canvas.width;
@@ -775,7 +890,7 @@
         ctx.putImageData(dstData, 0, 0);
     }
 
-    /* ROBUST AUTO-CROP: Center-Weighted Variance Thresholding */
+    /* AUTO CROP ALGORITHM */
     function autoCropImage(srcCanvas) {
         const width = srcCanvas.width;
         const height = srcCanvas.height;
@@ -783,7 +898,6 @@
         const imgData = ctx.getImageData(0, 0, width, height);
         const data = imgData.data;
 
-        // Sample background color from image corners
         const cornerSamples = [];
         const corners = [
             0, 
@@ -796,7 +910,6 @@
             cornerSamples.push({ r: data[idx], g: data[idx+1], b: data[idx+2] });
         });
 
-        // Compute average background color
         const bgR = cornerSamples.reduce((acc, c) => acc + c.r, 0) / 4;
         const bgG = cornerSamples.reduce((acc, c) => acc + c.g, 0) / 4;
         const bgB = cornerSamples.reduce((acc, c) => acc + c.b, 0) / 4;
@@ -804,7 +917,6 @@
         let minX = width, minY = height, maxX = 0, maxY = 0;
         let count = 0;
 
-        // Scan pixels for significant difference from background color
         for (let y = 0; y < height; y++) {
             for (let x = 0; x < width; x++) {
                 const idx = (y * width + x) * 4;
@@ -814,7 +926,6 @@
 
                 const diff = Math.abs(r - bgR) + Math.abs(g - bgG) + Math.abs(b - bgB);
 
-                // Threshold difference
                 if (diff > 45) {
                     if (x < minX) minX = x;
                     if (x > maxX) maxX = x;
@@ -825,9 +936,7 @@
             }
         }
 
-        // If no document detected or invalid area, return default padded crop
         if (count < (width * height * 0.02) || minX >= maxX || minY >= maxY) {
-            // Apply 5% safe border crop as fallback
             const cropX = Math.round(width * 0.05);
             const cropY = Math.round(height * 0.05);
             const cropW = Math.round(width * 0.90);
@@ -840,7 +949,6 @@
             return cropped;
         }
 
-        // Add 2% padding around the detected document boundary
         const padX = Math.round(width * 0.02);
         const padY = Math.round(height * 0.02);
 
