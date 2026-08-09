@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>ID Card A4 Print Tool (Pixel-Perfect 1:1 PDF)</title>
+  <title>ID Card A4 Print Tool (Enhanced Crop & PDF)</title>
   
-  <!-- html2canvas and jsPDF libraries for direct 1:1 image stamping -->
+  <!-- html2canvas and jsPDF for 1:1 PDF output -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
@@ -54,7 +54,7 @@
 
     .app-container {
       width: 100%;
-      max-width: 900px;
+      max-width: 950px;
       display: flex;
       flex-direction: column;
       gap: 20px;
@@ -62,7 +62,7 @@
 
     .upload-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
       gap: 16px;
     }
 
@@ -131,23 +131,35 @@
       background-color: #0369a1;
     }
 
-    .resize-control {
+    /* Controls Panel */
+    .controls-panel {
       width: 100%;
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 8px;
       text-align: left;
       font-size: 0.8rem;
       color: #475569;
-      margin-top: 4px;
       background: #f8fafc;
-      padding: 8px 12px;
-      border-radius: 6px;
+      padding: 10px 12px;
+      border-radius: 8px;
       border: 1px solid #e2e8f0;
     }
 
-    .resize-control input[type="range"] {
-      width: 100%;
+    .controls-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .controls-row label {
+      min-width: 90px;
+      font-weight: 600;
+    }
+
+    .controls-row input[type="range"] {
+      flex: 1;
       cursor: pointer;
     }
 
@@ -223,7 +235,6 @@
       letter-spacing: 1px;
     }
 
-    /* Locked Horizontal Layout */
     .cards-row {
       position: absolute;
       top: 25mm;
@@ -327,17 +338,17 @@
 </head>
 <body>
 
-  <div id="loading-overlay">Generating Exact PDF...</div>
+  <div id="loading-overlay">Processing Image...</div>
 
   <header>
     <h1>ID Card Print Helper</h1>
-    <p>Upload, rotate, crop, adjust scale, and export exact A4 layout to PDF.</p>
+    <p>Upload, rotate, auto-crop / manual trim, scale, and export exact A4 PDF layout.</p>
   </header>
 
   <div class="app-container">
     
     <div class="upload-grid">
-      <!-- Front Side -->
+      <!-- Front Side Controls -->
       <div class="upload-box" id="box-front">
         <h3>Front Side</h3>
         <div class="preview-thumb-container">
@@ -350,17 +361,26 @@
         <div class="btn-group">
           <button class="btn btn-rotate" onclick="rotateImage('front', -90)">↺ Left</button>
           <button class="btn btn-rotate" onclick="rotateImage('front', 90)">↻ Right</button>
+          <button class="btn btn-secondary" onclick="reCrop('front')">✂️ Recrop</button>
         </div>
         
-        <div class="resize-control">
-          <label for="scale-front">Card Size Scale: <b id="val-front">100%</b></label>
-          <input type="range" id="scale-front" min="70" max="130" value="100" oninput="resizeCard('front', this.value)" />
+        <div class="controls-panel">
+          <div class="controls-row">
+            <label>Print Scale:</label>
+            <input type="range" id="scale-front" min="70" max="130" value="100" oninput="resizeCard('front', this.value)" />
+            <b id="val-front">100%</b>
+          </div>
+          <div class="controls-row">
+            <label>Crop Margin:</label>
+            <input type="range" id="crop-front" min="0" max="30" value="0" oninput="manualCropAdjust('front', this.value)" />
+            <b id="crop-val-front">0%</b>
+          </div>
         </div>
 
         <input type="file" id="file-front" accept="image/*" onchange="handleFileSelect(event, 'front')" />
       </div>
 
-      <!-- Back Side -->
+      <!-- Back Side Controls -->
       <div class="upload-box" id="box-back">
         <h3>Back Side</h3>
         <div class="preview-thumb-container">
@@ -373,11 +393,20 @@
         <div class="btn-group">
           <button class="btn btn-rotate" onclick="rotateImage('back', -90)">↺ Left</button>
           <button class="btn btn-rotate" onclick="rotateImage('back', 90)">↻ Right</button>
+          <button class="btn btn-secondary" onclick="reCrop('back')">✂️ Recrop</button>
         </div>
 
-        <div class="resize-control">
-          <label for="scale-back">Card Size Scale: <b id="val-back">100%</b></label>
-          <input type="range" id="scale-back" min="70" max="130" value="100" oninput="resizeCard('back', this.value)" />
+        <div class="controls-panel">
+          <div class="controls-row">
+            <label>Print Scale:</label>
+            <input type="range" id="scale-back" min="70" max="130" value="100" oninput="resizeCard('back', this.value)" />
+            <b id="val-back">100%</b>
+          </div>
+          <div class="controls-row">
+            <label>Crop Margin:</label>
+            <input type="range" id="crop-back" min="0" max="30" value="0" oninput="manualCropAdjust('back', this.value)" />
+            <b id="crop-val-back">0%</b>
+          </div>
         </div>
 
         <input type="file" id="file-back" accept="image/*" onchange="handleFileSelect(event, 'back')" />
@@ -388,6 +417,7 @@
       <button class="btn btn-print" onclick="downloadPDF()">📄 Download PDF / Print</button>
     </div>
 
+    <!-- A4 Printable Layout Container -->
     <div class="a4-wrapper">
       <div class="a4-sheet" id="a4-sheet-element">
         <span class="a4-header-label">A4 Print Layout Preview</span>
@@ -427,7 +457,9 @@
     const BASE_WIDTH_MM = 85.6;
     const BASE_HEIGHT_MM = 53.9;
 
-    const canvasStore = { front: null, back: null };
+    // Canvas memory stores
+    const rawCanvasStore = { front: null, back: null };
+    const processedCanvasStore = { front: null, back: null };
 
     function triggerFile(id) {
       document.getElementById(id).click();
@@ -462,17 +494,57 @@
       slot.style.height = `${heightMm}mm`;
     }
 
+    /* Manual Crop Slider Adjustment */
+    function manualCropAdjust(target, cropPercent) {
+      document.getElementById(`crop-val-${target}`).innerText = `${cropPercent}%`;
+      if (!rawCanvasStore[target]) return;
+
+      const srcCanvas = rawCanvasStore[target];
+      const p = cropPercent / 100;
+
+      const cropX = Math.round(srcCanvas.width * (p * 0.5));
+      const cropY = Math.round(srcCanvas.height * (p * 0.5));
+      const cropW = Math.round(srcCanvas.width * (1 - p));
+      const cropH = Math.round(srcCanvas.height * (1 - p));
+
+      if (cropW <= 10 || cropH <= 10) return;
+
+      const trimmed = document.createElement('canvas');
+      trimmed.width = cropW;
+      trimmed.height = cropH;
+      const ctx = trimmed.getContext('2d');
+      ctx.drawImage(srcCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+      applyMagicColorFilter(trimmed);
+      processedCanvasStore[target] = trimmed;
+      renderCanvasToUI(target, trimmed);
+    }
+
+    function reCrop(target) {
+      document.getElementById(`crop-${target}`).value = 0;
+      document.getElementById(`crop-val-${target}`).innerText = "0%";
+      if (rawCanvasStore[target]) {
+        showLoader("Recropping...");
+        setTimeout(() => {
+          const cropped = autoCropImage(rawCanvasStore[target]);
+          applyMagicColorFilter(cropped);
+          processedCanvasStore[target] = cropped;
+          renderCanvasToUI(target, cropped);
+          hideLoader();
+        }, 50);
+      }
+    }
+
     /* Direct 1:1 Image-Stamped PDF Generation */
     async function downloadPDF() {
       showLoader("Generating Exact PDF...");
       const element = document.getElementById('a4-sheet-element');
 
-      // Hide preview guidelines/labels during snapshot
       element.classList.add('exporting');
 
       try {
         const canvas = await html2canvas(element, {
-          scale: 3, // High-DPI canvas render
+          scale: 3,
           useCORS: true,
           logging: false,
           backgroundColor: "#ffffff"
@@ -480,11 +552,9 @@
 
         const imgData = canvas.toDataURL('image/jpeg', 0.98);
 
-        // Initialize exact A4 PDF in millimeters
         const { jsPDF } = window.jspdf;
         const pdf = new jsPDF('portrait', 'mm', 'a4');
 
-        // Stamp the image over the entire 210mm x 297mm page (0,0 offset)
         pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297);
         pdf.save('ID_Card_A4_Print.pdf');
 
@@ -497,6 +567,7 @@
       }
     }
 
+    /* Camera Logic */
     async function openCamera(target) {
       activeTarget = target;
       const modal = document.getElementById('camera-modal');
@@ -535,6 +606,7 @@
       processImagePipeline(dataUrl, activeTarget);
     }
 
+    /* MAIN PIPELINE */
     function processImagePipeline(dataUrl, target) {
       const img = new Image();
       img.onload = () => {
@@ -545,10 +617,14 @@
             let srcCtx = srcCanvas.getContext('2d', { willReadFrequently: true });
             srcCtx.drawImage(img, 0, 0);
 
-            const croppedCanvas = edgeBasedAutoCrop(srcCanvas);
+            rawCanvasStore[target] = srcCanvas;
+            document.getElementById(`crop-${target}`).value = 0;
+            document.getElementById(`crop-val-${target}`).innerText = "0%";
+
+            const croppedCanvas = autoCropImage(srcCanvas);
             applyMagicColorFilter(croppedCanvas);
 
-            canvasStore[target] = croppedCanvas;
+            processedCanvasStore[target] = croppedCanvas;
             renderCanvasToUI(target, croppedCanvas);
 
         } catch (error) {
@@ -567,14 +643,14 @@
     }
 
     function rotateImage(target, degrees) {
-      if (!canvasStore[target]) {
+      if (!rawCanvasStore[target]) {
         alert("Please upload or capture an image first.");
         return;
       }
 
       showLoader("Rotating Image...");
       setTimeout(() => {
-        const currentCanvas = canvasStore[target];
+        const currentCanvas = rawCanvasStore[target];
         const rotatedCanvas = document.createElement('canvas');
         
         rotatedCanvas.width = currentCanvas.height;
@@ -585,8 +661,13 @@
         ctx.rotate((degrees * Math.PI) / 180);
         ctx.drawImage(currentCanvas, -currentCanvas.width / 2, -currentCanvas.height / 2);
 
-        canvasStore[target] = rotatedCanvas;
-        renderCanvasToUI(target, rotatedCanvas);
+        rawCanvasStore[target] = rotatedCanvas;
+
+        const cropped = autoCropImage(rotatedCanvas);
+        applyMagicColorFilter(cropped);
+        processedCanvasStore[target] = cropped;
+        renderCanvasToUI(target, cropped);
+
         hideLoader();
       }, 50);
     }
@@ -607,6 +688,7 @@
         slot.querySelector('span').style.display = 'none';
     }
 
+    /* MAGIC COLOR FILTER */
     function applyMagicColorFilter(canvas) {
         const ctx = canvas.getContext('2d');
         const width = canvas.width;
@@ -693,103 +775,86 @@
         ctx.putImageData(dstData, 0, 0);
     }
 
-    function edgeBasedAutoCrop(srcCanvas) {
+    /* ROBUST AUTO-CROP: Center-Weighted Variance Thresholding */
+    function autoCropImage(srcCanvas) {
         const width = srcCanvas.width;
         const height = srcCanvas.height;
-        
-        const maxProcessingDim = 1000;
-        let scaleDownFactor = 1;
-
-        if (width > maxProcessingDim || height > maxProcessingDim) {
-            scaleDownFactor = maxProcessingDim / Math.max(width, height);
-        }
-
-        const processingWidth = width * scaleDownFactor;
-        const processingHeight = height * scaleDownFactor;
-
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = processingWidth;
-        tempCanvas.height = processingHeight;
-        const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
-        tempCtx.drawImage(srcCanvas, 0, 0, processingWidth, processingHeight);
-        
-        const imgData = tempCtx.getImageData(0, 0, processingWidth, processingHeight);
+        const ctx = srcCanvas.getContext('2d', { willReadFrequently: true });
+        const imgData = ctx.getImageData(0, 0, width, height);
         const data = imgData.data;
 
-        const grayscale = new Float32Array(processingWidth * processingHeight);
-        for (let i = 0; i < data.length; i += 4) {
-            grayscale[i / 4] = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
-        }
+        // Sample background color from image corners
+        const cornerSamples = [];
+        const corners = [
+            0, 
+            (width - 1) * 4, 
+            ((height - 1) * width) * 4, 
+            ((height - 1) * width + width - 1) * 4
+        ];
+        
+        corners.forEach(idx => {
+            cornerSamples.push({ r: data[idx], g: data[idx+1], b: data[idx+2] });
+        });
 
-        const sobelData = new Float32Array(processingWidth * processingHeight);
-        let maxSobel = 0;
+        // Compute average background color
+        const bgR = cornerSamples.reduce((acc, c) => acc + c.r, 0) / 4;
+        const bgG = cornerSamples.reduce((acc, c) => acc + c.g, 0) / 4;
+        const bgB = cornerSamples.reduce((acc, c) => acc + c.b, 0) / 4;
 
-        for (let y = 1; y < processingHeight - 1; y++) {
-            for (let x = 1; x < processingWidth - 1; x++) {
-                const px = (y * processingWidth) + x;
-                
-                const gX = 
-                    -1 * grayscale[((y-1)*processingWidth)+(x-1)] + 1 * grayscale[((y-1)*processingWidth)+(x+1)] +
-                    -2 * grayscale[(y*processingWidth)+(x-1)]     + 2 * grayscale[(y*processingWidth)+(x+1)] +
-                    -1 * grayscale[((y+1)*processingWidth)+(x-1)] + 1 * grayscale[((y+1)*processingWidth)+(x+1)];
-                
-                const gY = 
-                    -1 * grayscale[((y-1)*processingWidth)+(x-1)] - 2 * grayscale[((y-1)*processingWidth)+x] - 1 * grayscale[((y-1)*processingWidth)+(x+1)] +
-                     1 * grayscale[((y+1)*processingWidth)+(x-1)] + 2 * grayscale[((y+1)*processingWidth)+x] + 1 * grayscale[((y+1)*processingWidth)+(x+1)];
-                
-                const magnitude = Math.sqrt(gX * gX + gY * gY);
-                sobelData[px] = magnitude;
-                if(magnitude > maxSobel) maxSobel = magnitude;
-            }
-        }
+        let minX = width, minY = height, maxX = 0, maxY = 0;
+        let count = 0;
 
-        const edgeThreshold = maxSobel * 0.20;
-        let minX = processingWidth, minY = processingHeight, maxX = 0, maxY = 0;
-        let edgesFound = 0;
+        // Scan pixels for significant difference from background color
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                const idx = (y * width + x) * 4;
+                const r = data[idx];
+                const g = data[idx+1];
+                const b = data[idx+2];
 
-        for (let y = 0; y < processingHeight; y++) {
-            for (let x = 0; x < processingWidth; x++) {
-                if (sobelData[(y * processingWidth) + x] > edgeThreshold) {
+                const diff = Math.abs(r - bgR) + Math.abs(g - bgG) + Math.abs(b - bgB);
+
+                // Threshold difference
+                if (diff > 45) {
                     if (x < minX) minX = x;
                     if (x > maxX) maxX = x;
                     if (y < minY) minY = y;
                     if (y > maxY) maxY = y;
-                    edgesFound++;
+                    count++;
                 }
             }
         }
 
-        if (edgesFound < (processingWidth * processingHeight * 0.01) || minX >= maxX || minY >= maxY) {
-            return srcCanvas; 
+        // If no document detected or invalid area, return default padded crop
+        if (count < (width * height * 0.02) || minX >= maxX || minY >= maxY) {
+            // Apply 5% safe border crop as fallback
+            const cropX = Math.round(width * 0.05);
+            const cropY = Math.round(height * 0.05);
+            const cropW = Math.round(width * 0.90);
+            const cropH = Math.round(height * 0.90);
+
+            const cropped = document.createElement('canvas');
+            cropped.width = cropW;
+            cropped.height = cropH;
+            cropped.getContext('2d').drawImage(srcCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+            return cropped;
         }
 
-        const finalMinX = minX / scaleDownFactor;
-        const finalMinY = minY / scaleDownFactor;
-        const finalMaxX = maxX / scaleDownFactor;
-        const finalMaxY = maxY / scaleDownFactor;
+        // Add 2% padding around the detected document boundary
+        const padX = Math.round(width * 0.02);
+        const padY = Math.round(height * 0.02);
 
-        const paddingW = width * 0.02;
-        const paddingH = height * 0.02;
+        const finalX = Math.max(0, minX - padX);
+        const finalY = Math.max(0, minY - padY);
+        const finalW = Math.min(width - finalX, (maxX - minX) + (padX * 2));
+        const finalH = Math.min(height - finalY, (maxY - minY) + (padY * 2));
 
-        const cropX = Math.max(0, finalMinX - paddingW);
-        const cropY = Math.max(0, finalMinY - paddingH);
-        const cropWidth = Math.min(width - cropX, (finalMaxX - finalMinX) + paddingW * 2);
-        const cropHeight = Math.min(height - cropY, (finalMaxY - finalMinY) + paddingH * 2);
+        const cropped = document.createElement('canvas');
+        cropped.width = finalW;
+        cropped.height = finalH;
+        cropped.getContext('2d').drawImage(srcCanvas, finalX, finalY, finalW, finalH, 0, 0, finalW, finalH);
 
-        if(cropWidth <= 10 || cropHeight <= 10) return srcCanvas;
-
-        const croppedCanvas = document.createElement('canvas');
-        croppedCanvas.width = cropWidth;
-        croppedCanvas.height = cropHeight;
-        const croppedCtx = croppedCanvas.getContext('2d');
-
-        croppedCtx.drawImage(
-            srcCanvas,
-            cropX, cropY, cropWidth, cropHeight,
-            0, 0, cropWidth, cropHeight
-        );
-
-        return croppedCanvas;
+        return cropped;
     }
   </script>
 </body>
